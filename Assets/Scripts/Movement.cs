@@ -1,8 +1,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Photon.Pun;
+using Photon.Realtime;
+using Cinemachine;
 
-public class Movement : MonoBehaviour
+public class Movement : MonoBehaviour, IPunObservable
 {
     private CharacterController controller;
     private new Transform transform;
@@ -13,7 +16,15 @@ public class Movement : MonoBehaviour
     private Ray ray;
     private Vector3 hitPoint;
 
+    private PhotonView pv;
+    private CinemachineVirtualCamera virtualCamera;
+
     public float moveSpeed = 10.0f;
+
+    private Vector3 receivePos;
+    private Quaternion receiveRot;
+
+    public float damping = 10.0f;
 
     void Start()
     {
@@ -22,13 +33,35 @@ public class Movement : MonoBehaviour
         animator = GetComponent<Animator>();
         camera = Camera.main;
 
+        pv = GetComponent<PhotonView>();
+        virtualCamera = GameObject.FindObjectOfType<CinemachineVirtualCamera>();
+
+        if (pv.IsMine)
+        {
+            virtualCamera.Follow = transform;
+            virtualCamera.LookAt = transform;
+        }
+
         plane = new Plane(transform.up, transform.position);
     }
 
     void Update()
     {
-        Move();
-        Turn();
+        if (pv.IsMine)
+        {
+            Move();
+            Turn();
+        }
+        else
+        {
+            transform.position = Vector3.Lerp(transform.position,
+                                            receivePos,
+                                            Time.deltaTime * damping);
+
+            transform.rotation = Quaternion.Slerp(transform.rotation,
+                                                receiveRot,
+                                                Time.deltaTime * damping);
+        }
     }
 
     float h => Input.GetAxis("Horizontal");
@@ -67,5 +100,19 @@ public class Movement : MonoBehaviour
         lookDir.y = 0;
 
         transform.localRotation = Quaternion.LookRotation(lookDir);
+    }
+
+    public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
+    {
+        if (stream.IsWriting)
+        {
+            stream.SendNext(transform.position);
+            stream.SendNext(transform.rotation);
+        }
+        else
+        {
+            receivePos = (Vector3)stream.ReceiveNext();
+            receiveRot = (Quaternion)stream.ReceiveNext();
+        }
     }
 }
