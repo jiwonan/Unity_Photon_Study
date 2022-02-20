@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TMPro;
 using Photon.Pun;
 using Photon.Realtime;
 
@@ -9,15 +10,60 @@ public class PhotonManager : MonoBehaviourPunCallbacks
     private readonly string version = "1.0";
     private string userId = "Zack";
 
+    public TMP_InputField userIF;
+    public TMP_InputField roomNameIF;
+
+    private Dictionary<string, GameObject> rooms = new Dictionary<string, GameObject>();
+    private GameObject roomItemPrefab;
+    public Transform scrollContent;
+
     void Awake()
     {
         PhotonNetwork.AutomaticallySyncScene = true;
         PhotonNetwork.GameVersion = version;
-        PhotonNetwork.NickName = userId;
+        //PhotonNetwork.NickName = userId;
 
         Debug.Log(PhotonNetwork.SendRate);
 
-        PhotonNetwork.ConnectUsingSettings();
+        roomItemPrefab = Resources.Load<GameObject>("RoomItem");
+
+        if (PhotonNetwork.IsConnected == false)
+        {
+            PhotonNetwork.ConnectUsingSettings();
+        }
+    }
+
+    void Start()
+    {
+        userId = PlayerPrefs.GetString("USER_ID", $"USER_{Random.Range(1, 21):00}");
+        userIF.text = userId;
+
+        PhotonNetwork.NickName = userId;
+    }
+
+    public void SetUserId()
+    {
+        if (string.IsNullOrEmpty(userIF.text))
+        {
+            userId = $"USER_{Random.Range(1, 21):00}";
+        }
+        else
+        {
+            userId = userIF.text;
+        }
+
+        PlayerPrefs.SetString("USER_ID", userId);
+        PhotonNetwork.NickName = userId;
+    }
+
+    string SetRoomName()
+    {
+        if (string.IsNullOrEmpty(roomNameIF.text))
+        {
+            roomNameIF.text = $"ROOM_{Random.Range(1, 1001):000}";
+        }
+
+        return roomNameIF.text;
     }
 
     public override void OnConnectedToMaster()
@@ -30,19 +76,20 @@ public class PhotonManager : MonoBehaviourPunCallbacks
     public override void OnJoinedLobby()
     {
         Debug.Log($"PhotonNetwork.InLobby = {PhotonNetwork.InLobby}");
-        PhotonNetwork.JoinRandomRoom();
+        //PhotonNetwork.JoinRandomRoom();
     }
 
     public override void OnJoinRandomFailed(short returnCode, string message)
     {
         Debug.Log($"JoinRandom Filed {returnCode}:{message}");
 
-        RoomOptions ro = new RoomOptions();
+        OnMakeRoomClick();
+        /*RoomOptions ro = new RoomOptions();
         ro.MaxPlayers = 20;
         ro.IsOpen = true;
         ro.IsVisible = true;
 
-        PhotonNetwork.CreateRoom("My Room", ro);
+        PhotonNetwork.CreateRoom("My Room", ro);*/
     }
 
     public override void OnCreatedRoom()
@@ -61,9 +108,69 @@ public class PhotonManager : MonoBehaviourPunCallbacks
             Debug.Log($"{player.Value.NickName} , {player.Value.ActorNumber}");
         }
 
-        Transform[] points = GameObject.Find("SpawnPointGroup").GetComponentsInChildren<Transform>();
-        int idx = Random.Range(1, points.Length);
+        //Transform[] points = GameObject.Find("SpawnPointGroup").GetComponentsInChildren<Transform>();
+        //int idx = Random.Range(1, points.Length);
 
-        PhotonNetwork.Instantiate("Player", points[idx].position, points[idx].rotation, 0);
+        //PhotonNetwork.Instantiate("Player", points[idx].position, points[idx].rotation, 0);
+
+        if (PhotonNetwork.IsMasterClient)
+        {
+            PhotonNetwork.LoadLevel("BattleField");
+        }
     }
+
+    public override void OnRoomListUpdate(List<RoomInfo> roomList)
+    {
+        GameObject tempRoom = null;
+
+        foreach (var roomInfo in roomList)
+        {
+            if (roomInfo.RemovedFromList == true)
+            {
+                rooms.TryGetValue(roomInfo.Name, out tempRoom);
+
+                Destroy(tempRoom);
+
+                rooms.Remove(roomInfo.Name);
+            }
+            else
+            {
+                if (rooms.ContainsKey(roomInfo.Name) == false)
+                {
+                    GameObject roomPrefab = Instantiate(roomItemPrefab, scrollContent);
+
+                    roomPrefab.GetComponent<RoomData>().RoomInfo = roomInfo;
+
+                    rooms.Add(roomInfo.Name, roomPrefab);
+                }
+                else
+                {
+                    rooms.TryGetValue(roomInfo.Name, out tempRoom);
+                    tempRoom.GetComponent<RoomData>().RoomInfo = roomInfo;
+                }
+            }
+            Debug.Log($"Room={roomInfo.Name} ({roomInfo.PlayerCount}/{roomInfo.MaxPlayers})");
+        }
+    }
+
+    #region UI_BUTTON_EVENT
+    public void OnLoginClick()
+    {
+        SetUserId();
+
+        PhotonNetwork.JoinRandomRoom();
+    }
+
+    public void OnMakeRoomClick()
+    {
+        SetUserId();
+
+        RoomOptions ro = new RoomOptions();
+        ro.MaxPlayers = 20;
+        ro.IsOpen = true;
+        ro.IsVisible = true;
+
+        PhotonNetwork.CreateRoom(SetRoomName(), ro);
+    }
+    #endregion
 }
