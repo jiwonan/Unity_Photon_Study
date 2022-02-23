@@ -25,13 +25,13 @@ public class Fire : MonoBehaviour
     {
         if (pv.IsMine && isMouseClick)
         {
-            FireBullet();
-            pv.RPC("FireBullet", RpcTarget.Others, null);
+            FireBullet(pv.Owner.ActorNumber);
+            pv.RPC("FireBullet", RpcTarget.Others, pv.Owner.ActorNumber);
         }
     }
 
     [PunRPC]
-    private void FireBullet()
+    private void FireBullet(int actorNo)
     {
         Debug.Log(muzzleFlash);
         if (!muzzleFlash.isPlaying) muzzleFlash.Play(true);
@@ -39,5 +39,7 @@ public class Fire : MonoBehaviour
         GameObject bullet = Instantiate(bulletPrefab,
                                       firePos.position,
                                       firePos.rotation);
+
+        bullet.GetComponent<Bullet>().actorNumber = actorNo;
     }
 }

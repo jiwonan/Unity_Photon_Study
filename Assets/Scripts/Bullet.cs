@@ -5,6 +5,7 @@ using UnityEngine;
 public class Bullet : MonoBehaviour
 {
     public GameObject effect;
+    public int actorNumber;
 
     void Start()
     {
